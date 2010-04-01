@@ -146,7 +146,7 @@ module Admin::FormHelper
       # entry are assigned to that entry.
       #
       items_to_relate = model_to_relate.find(:all, :conditions => ["#{foreign_key} is ?", nil])
-      if condition && !items_to_relate.empty?
+      if condition && !items_to_relate.empty? && @current_user.can_perform?(model_to_relate, 'relate')
         html << <<-HTML
   #{form_tag :action => 'relate', :id => @item.id}
   #{hidden_field :related, :model, :value => model_to_relate}

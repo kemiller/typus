@@ -62,9 +62,8 @@ module Admin::TableHelper
         when 'index'
           condition = if model.typus_user_id? && !@current_user.is_root?
                         item.owned_by?(@current_user)
-                      else
-                        @current_user.can_perform?(model, 'destroy')
                       end
+          condition &&= @current_user.can_perform?(model, 'destroy')
           perform = link_to trash, { :action => 'destroy', :id => item.id }, 
                                      :title => _("Remove"), 
                                      :confirm => _("Remove entry?"), 
@@ -75,7 +74,7 @@ module Admin::TableHelper
                                         :title => _("Unrelate"), 
                                         :confirm => _("Unrelate {{unrelate_model}} from {{unrelate_model_from}}?", 
                                         :unrelate_model => model.typus_human_name, 
-                                        :unrelate_model_from => @resource[:human_name])
+                                        :unrelate_model_from => @resource[:human_name]) if @current_user.can_perform?(model, 'delete')
         when 'show'
           # If we are showing content, we only can relate and unrelate if we are 
           # the owners of the owner record.
@@ -84,6 +83,8 @@ module Admin::TableHelper
           condition = if @resource[:class].typus_user_id? && !@current_user.is_root?
                         @item.owned_by?(@current_user)
                       end
+
+          condition &&= @current_user.can_perform?(model, 'delete')
           perform = link_to unrelate, { :action => 'unrelate', :id => params[:id], :resource => model, :resource_id => item.id }, 
                                         :title => _("Unrelate"), 
                                         :confirm => _("Unrelate {{unrelate_model}} from {{unrelate_model_from}}?", 
