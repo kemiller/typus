@@ -64,9 +64,8 @@ module Admin::TableHelper
         when 'index'
           condition = if model.typus_user_id? && @current_user.is_not_root?
                         item.owned_by?(@current_user)
-                      else
-                        @current_user.can?('destroy', model)
                       end
+          condition &&= @current_user.can?('destroy', model)
           perform = link_to trash, { :action => 'destroy', :id => item.id }, 
                                      :title => _("Remove"), 
                                      :confirm => _("Remove entry?") if condition
@@ -75,8 +74,8 @@ module Admin::TableHelper
           perform = link_to unrelate, { :action => 'unrelate', :id => params[:id], :resource => model, :resource_id => item.id }, 
                                         :title => _("Unrelate"), 
                                         :confirm => _("Unrelate {{unrelate_model}} from {{unrelate_model_from}}?", 
-                                                      :unrelate_model => model.typus_human_name, 
-                                                      :unrelate_model_from => @resource[:human_name])
+                                        :unrelate_model => model.typus_human_name, 
+                                        :unrelate_model_from => @resource[:human_name]) if @current_user.can?('destroy', model)
         when 'show'
           # If we are showing content, we only can relate and unrelate if we are 
           # the owners of the owner record.
@@ -85,11 +84,13 @@ module Admin::TableHelper
           condition = if @resource[:class].typus_user_id? && @current_user.is_not_root?
                         @item.owned_by?(@current_user)
                       end
+
+          condition &&= @current_user.can?('destroy', model)
           perform = link_to unrelate, { :action => 'unrelate', :id => params[:id], :resource => model, :resource_id => item.id }, 
                                         :title => _("Unrelate"), 
                                         :confirm => _("Unrelate {{unrelate_model}} from {{unrelate_model_from}}?", 
-                                                      :unrelate_model => model.typus_human_name, 
-                                                      :unrelate_model_from => @resource[:human_name]) if condition
+                                        :unrelate_model => model.typus_human_name, 
+                                        :unrelate_model_from => @resource[:human_name]) if condition
         end
 
         html << <<-HTML
@@ -111,29 +112,29 @@ module Admin::TableHelper
 
                 content = key.end_with?('_id') ? key : model.human_attribute_name(key)
 
-                if (model.model_fields.map(&:first).collect { |i| i.to_s }.include?(key) || model.reflect_on_all_associations(:belongs_to).map(&:name).include?(key.to_sym)) && params[:action] == 'index'
-                  sort_order = case params[:sort_order]
-                               when 'asc'   then ['desc', '&darr;']
-                               when 'desc'  then ['asc', '&uarr;']
-                               else
-                                 [nil, nil]
-                               end
-                  order_by = model.reflect_on_association(key.to_sym).primary_key_name rescue key
-                  switch = sort_order.last if params[:order_by].eql?(order_by)
-                  options = { :order_by => order_by, :sort_order => sort_order.first }
+        if (model.model_fields.map(&:first).collect { |i| i.to_s }.include?(key) || model.reflect_on_all_associations(:belongs_to).map(&:name).include?(key.to_sym)) && params[:action] == 'index'
+          sort_order = case params[:sort_order]
+                       when 'asc'   then  ['desc', '&darr;']
+                       when 'desc'  then  ['asc', '&uarr;']
+                       else
+                         [nil, nil]
+                       end
+          order_by = model.reflect_on_association(key.to_sym).primary_key_name rescue key
+          switch = sort_order.last if params[:order_by].eql?(order_by)
+          options = { :order_by => order_by, :sort_order => sort_order.first }
                   content = link_to "#{content} #{switch}", params.merge(options)
-                end
+        end
 
                 content
 
-              end
+      end
 
     headers << "&nbsp;" if @current_user.can?('delete', model)
 
     render "admin/helpers/table_header", 
            :headers => headers
 
-  end
+    end
 
   # OPTIMIZE: Refactor (Remove rescue)
   def typus_table_belongs_to_field(attribute, item)
@@ -244,7 +245,7 @@ module Admin::TableHelper
                 :field => attribute.gsub(/\?$/,'') }
 
     confirm = _("Change {{attribute}}?", 
-                :attribute => item.class.human_attribute_name(attribute).downcase)
+                                   :attribute => item.class.human_attribute_name(attribute).downcase)
 
     content = link_to _(link_text), options, :confirm => confirm
 
