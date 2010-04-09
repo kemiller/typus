@@ -239,8 +239,8 @@ module Typus
       if query_params[:search]
         query = ActiveRecord::Base.connection.quote_string(query_params[:search].downcase)
         search = typus_defaults_for(:search).map do |s|
-                   ["LOWER(#{s}) LIKE '%#{query}%'"]
-                 end
+          string_search_compare(s,query)
+        end
         conditions = merge_conditions(conditions, search.join(' OR '))
       end
 
@@ -308,6 +308,44 @@ module Typus
 
     def typus_user_id?
       columns.map { |u| u.name }.include?(Typus.user_fk)
+    end
+
+    private
+
+    def string_search_compare(field, query)
+
+      search_mode = case field 
+                    when /\A%.*%\Z/
+                      :substring
+                    when /\A[^%].*%\Z/
+                      :prefix
+                    when /\A%.*[^%]\Z/
+                      :suffix
+                    else
+                      Typus::Configuration.config[:default_search_mode]
+                    end
+
+      field = field.gsub('%','')
+
+      left = case Typus::Configuration.config[:db_case_handling]
+             when :native
+               field
+             else
+               "LOWER(#{field})"
+             end
+
+      right = case search_mode
+              when :prefix 
+                "'#{query}%'"
+              when :suffix 
+                "'%#{query}'"
+              when :exact
+                "'#{query}'"
+              else
+                "'%#{query}%'"
+              end
+
+      "#{left} LIKE #{right}"
     end
 
   end

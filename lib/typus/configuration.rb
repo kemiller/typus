@@ -13,7 +13,9 @@ module Typus
                       :root => "admin", 
                       :ssl => false, 
                       :user_class_name => "TypusUser", 
-                      :user_fk => "typus_user_id" }
+                      :user_fk => "typus_user_id",
+                      :default_search_mode => :substring,
+                      :db_case_handling => :force_lower }
 
     # Default options which can be overwritten from the initializer.
     model_options = { :default_action_on_item => "edit", 

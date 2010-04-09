@@ -19,7 +19,7 @@ Comment:
     csv: email, post_id
   export: csv
   filters: post
-  search: email, body
+  search: email%, %body%
   application: Blog
 
 Delayed::Task:

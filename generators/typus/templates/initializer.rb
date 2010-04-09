@@ -11,6 +11,8 @@ Typus::Configuration.options[:app_name] = '<%= options[:app_name] %>'
 # Typus::Configuration.options[:ssl] = false
 Typus::Configuration.options[:user_class_name] = '<%= options[:user_class_name] %>'
 Typus::Configuration.options[:user_fk] = '<%= options[:user_fk] %>'
+Typus::Configuration.options[:default_search_mode] = :exact
+# Typus::Configuration.options[:db_case_handling] = :native
 
 # Model options which can also be defined by model on the yaml files.
 

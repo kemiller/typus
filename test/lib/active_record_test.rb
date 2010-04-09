@@ -246,6 +246,26 @@ class ActiveRecordTest < ActiveSupport::TestCase
     assert_equal expected, TypusUser.build_conditions(params).first
   end
 
+  def test_should_return_sql_conditions_on_search_for_typus_user_with_custom_config
+    Typus::Configuration.config[:default_search_mode] = :exact
+    expected = "(LOWER(first_name) LIKE 'francesc' OR LOWER(last_name) LIKE 'francesc' OR LOWER(email) LIKE 'francesc' OR LOWER(role) LIKE 'francesc')"
+    params = { :search => "francesc" }
+    assert_equal expected, TypusUser.build_conditions(params).first
+
+    Typus::Configuration.config[:db_case_handling] = :native
+    expected = "(first_name LIKE 'francesc' OR last_name LIKE 'francesc' OR email LIKE 'francesc' OR role LIKE 'francesc')"
+    params = { :search => "francesc" }
+    assert_equal expected, TypusUser.build_conditions(params).first
+  end
+
+  def test_should_return_customized_sql_on_search_for_comment
+    Typus::Configuration.config[:default_search_mode] = :exact
+    Typus::Configuration.config[:db_case_handling] = :native
+    expected = "(email LIKE 'francesc%' OR body LIKE '%francesc%')"
+    params = { :search => "francesc" }
+    assert_equal expected, Comment.build_conditions(params).first
+  end
+
   def test_should_return_sql_conditions_on_search_and_filter_for_typus_user
 
     case ENV["DB"]
@@ -367,6 +387,11 @@ class ActiveRecordTest < ActiveSupport::TestCase
   def test_should_verify_typus_user_id
     assert Post.typus_user_id?
     assert !TypusUser.typus_user_id?
+  end
+
+  def teardown
+    Typus::Configuration.config[:default_search_mode] = nil
+    Typus::Configuration.config[:db_case_handling] = nil
   end
 
 end

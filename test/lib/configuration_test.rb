@@ -20,6 +20,8 @@ class ConfigurationTest < ActiveSupport::TestCase
     assert_equal false, Typus::Configuration.options[:ssl]
     assert_equal "TypusUser", Typus::Configuration.options[:user_class_name]
     assert_equal "typus_user_id", Typus::Configuration.options[:user_fk]
+    assert_equal :substring, Typus::Configuration.options[:default_search_mode]
+    assert_equal :force_lower, Typus::Configuration.options[:db_case_handling]
   end
 
   def test_should_verify_model_configuration_options
