@@ -174,7 +174,7 @@ module Admin::FormHelper
 <a name="#{field}"></a>
 <div class="box_relationships" id="#{model_to_relate_as_resource}">
   <h2>
-  #{link_to model_to_relate.pluralized_human_name, { :controller => "admin/#{model_to_relate_as_resource}", foreign_key => @item.id }, :title => _("{{model}} filtered by {{filtered_by}}", :model => model_to_relate.typus_human_name.pluralize, :filtered_by => @item.to_label)}
+  #{link_to model_to_relate.pluralized_human_name, { :controller => "admin/#{model_to_relate_as_resource}", foreign_key => @item.id }, :title => _("%{model} filtered by %{filtered_by}", :model => model_to_relate.typus_human_name.pluralize, :filtered_by => @item.to_label)}
   #{add_new}
   </h2>
       HTML
@@ -208,9 +208,10 @@ module Admin::FormHelper
       items_per_page = model_to_relate.typus_options_for(:per_page).to_i
 
       @pager = ::Paginator.new(items_count, items_per_page) do |offset, per_page|
-        options.merge!({:limit => per_page, :offset => offset})
+        eager_loading = model_to_relate.reflect_on_all_associations(:belongs_to).map { |i| i.name } - [@resource[:class].name.downcase.to_sym]
+        options.merge!({:limit => per_page, :offset => offset, :include => eager_loading})
         items = @resource[:class].find(params[:id]).send(field).find(:all, options)
-      end
+      end 
 
       @items = @pager.page(params[:page])
 
@@ -224,7 +225,7 @@ module Admin::FormHelper
                            association)
         html << pagination(:anchor => model_to_relate.name.tableize) unless pagination.nil?
       else
-        message = _("There are no {{records}}.", 
+        message = _("There are no %{records}.", 
                     :records => model_to_relate.typus_human_name.pluralize.downcase)
         html << <<-HTML
   <div id="flash" class="notice"><p>#{message}</p></div>
@@ -309,7 +310,7 @@ module Admin::FormHelper
                            association)
         html << pagination(:anchor => model_to_relate.name.tableize) unless pagination.nil?
       else
-        message = _("There are no {{records}}.", 
+        message = _("There are no %{records}.", 
                     :records => model_to_relate.typus_human_name.pluralize.downcase)
         html << <<-HTML
   <div id="flash" class="notice"><p>#{message}</p></div>
@@ -372,7 +373,7 @@ module Admin::FormHelper
                            options, 
                            association)
       else
-        message = _("There is no {{records}}.", 
+        message = _("There is no %{records}.", 
                     :records => model_to_relate.typus_human_name.downcase)
         html << <<-HTML
   <div id="flash" class="notice"><p>#{message}</p></div>
@@ -435,7 +436,7 @@ module Admin::FormHelper
     content = if has_file_thumbnail
                 image_tag item.send(attachment).url(file_thumbnail)
               else
-                _("View {{attribute}}", :attribute => @item.class.human_attribute_name(attribute).downcase)
+                _("View %{attribute}", :attribute => @item.class.human_attribute_name(attribute).downcase)
               end
 
     render "admin/helpers/preview", 

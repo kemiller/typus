@@ -16,10 +16,12 @@ Rake::TestTask.new(:test) do |t|
   t.verbose = true
 end
 
+desc 'Build the gem.'
 task :build do
   system "gem build typus.gemspec"
 end
 
+desc 'Build and release the gem.'
 task :release => :build do
   version = Typus::VERSION
   system "git tag v#{version}"
@@ -29,37 +31,7 @@ task :release => :build do
   system "gem push typus-#{version}"
 end
 
-##
-# Docs
-##
-
-namespace :site do
-
-  desc "Regenerate the documentation"
-  task :build do
-    command = `which asciidoc`.strip
-    unless command.empty?
-      puts "Building site using `asciidoc`."
-      system "cd doc && #{command.strip} -a icons -a toc -o site/index.html 000-index.txt"
-    else
-      puts "AsciiDoc is not installed."
-    end
-  end
-
-  desc "Update the website"
-  task :deploy => :build do
-    Dir.chdir("doc/site") do
-      sh %(scp -r ./ fesplugas@labs.intraducibles.com:~/public_html/labs.intraducibles.com/current/public/projects/typus/documentation)
-    end
-  end
-
-end
-
-##
-# Extras
-##
-
-desc "Generate specdoc-style documentation from tests"
+desc 'Generate specdoc-style documentation from tests'
 task :specs do
 
   puts 'Started'
