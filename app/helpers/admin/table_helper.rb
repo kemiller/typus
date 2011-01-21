@@ -1,5 +1,6 @@
 module Admin::TableHelper
 
+  # OPTIMIZE: Move html code to partial & refactor.
   def build_typus_table(model, fields, items, link_options = {}, association = nil)
 
     returning(String.new) do |html|
@@ -26,6 +27,7 @@ module Admin::TableHelper
           when :belongs_to then        html << typus_table_belongs_to_field(key, item)
           when :tree then              html << typus_table_tree_field(key, item)
           when :position then          html << typus_table_position_field(key, item)
+          when :selector then          html << typus_table_selector(key, item)
           when :has_and_belongs_to_many then
             html << typus_table_has_and_belongs_to_many_field(key, item)
           else
@@ -33,10 +35,10 @@ module Admin::TableHelper
           end
         end
 
-        action = if model.typus_user_id? && !@current_user.is_root?
+        action = if model.typus_user_id? && @current_user.is_not_root?
                    # If there's a typus_user_id column on the table and logged user is not root ...
                    item.owned_by?(@current_user) ? item.class.typus_options_for(:default_action_on_item) : 'show'
-                 elsif !@current_user.can_perform?(model, 'edit')
+                 elsif @current_user.cannot?('edit', model)
                    'show'
                  else
                    item.class.typus_options_for(:default_action_on_item)
@@ -60,27 +62,30 @@ module Admin::TableHelper
 
         case params[:action]
         when 'index'
+          condition = if model.typus_user_id? && @current_user.is_not_root?
+                        item.owned_by?(@current_user)
+                      end
+          condition &&= @current_user.can?('destroy', model)
           perform = link_to trash, { :action => 'destroy', :id => item.id }, 
                                      :title => _("Remove"), 
-                                     :confirm => _("Remove entry?"), 
-                                     :method => :delete if @current_user.can_perform?(model, 'delete')
+                                     :confirm => _("Remove entry?") if condition
         when 'edit'
           # If we are editing content, we can relate and unrelate always!
           perform = link_to unrelate, { :action => 'unrelate', :id => params[:id], :resource => model, :resource_id => item.id }, 
                                         :title => _("Unrelate"), 
                                         :confirm => _("Unrelate {{unrelate_model}} from {{unrelate_model_from}}?", 
                                         :unrelate_model => model.typus_human_name, 
-                                        :unrelate_model_from => @resource[:human_name]) if @current_user.can_perform?(model, 'delete')
+                                        :unrelate_model_from => @resource[:human_name]) if @current_user.can?('destroy', model)
         when 'show'
           # If we are showing content, we only can relate and unrelate if we are 
           # the owners of the owner record.
           # If the owner record doesn't have a foreign key (Typus.user_fk) we look
           # each item to verify the ownership.
-          condition = if @resource[:class].typus_user_id? && !@current_user.is_root?
+          condition = if @resource[:class].typus_user_id? && @current_user.is_not_root?
                         @item.owned_by?(@current_user)
                       end
 
-          condition &&= @current_user.can_perform?(model, 'delete')
+          condition &&= @current_user.can?('destroy', model)
           perform = link_to unrelate, { :action => 'unrelate', :id => params[:id], :resource => model, :resource_id => item.id }, 
                                         :title => _("Unrelate"), 
                                         :confirm => _("Unrelate {{unrelate_model}} from {{unrelate_model_from}}?", 
@@ -101,16 +106,11 @@ module Admin::TableHelper
 
   end
 
-  ##
-  # Header of the table
-  #
   def typus_table_header(model, fields)
-    returning(String.new) do |html|
-      headers = []
-      fields.each do |key, value|
 
-        content = model.human_attribute_name(key)
-        content += " (#{key})" if key.include?('_id')
+    headers = fields.map do |key, value|
+
+                content = key.end_with?('_id') ? key : model.human_attribute_name(key)
 
         if (model.model_fields.map(&:first).collect { |i| i.to_s }.include?(key) || model.reflect_on_all_associations(:belongs_to).map(&:name).include?(key.to_sym)) && params[:action] == 'index'
           sort_order = case params[:sort_order]
@@ -122,64 +122,86 @@ module Admin::TableHelper
           order_by = model.reflect_on_association(key.to_sym).primary_key_name rescue key
           switch = sort_order.last if params[:order_by].eql?(order_by)
           options = { :order_by => order_by, :sort_order => sort_order.first }
-          content = (link_to "#{content} #{switch}", params.merge(options))
+                  content = link_to "#{content} #{switch}", params.merge(options)
         end
 
-        headers << "<th>#{content}</th>"
+                content
 
       end
-      headers << "<th>&nbsp;</th>" if @current_user.can_perform?(model, 'delete')
-      html << <<-HTML
-<tr>
-#{headers.join("\n")}
-</tr>
-      HTML
-    end
-  end
 
+    headers << "&nbsp;" if @current_user.can?('delete', model)
+
+    render "admin/helpers/table_header", 
+           :headers => headers
+
+    end
+
+  # OPTIMIZE: Refactor (Remove rescue)
   def typus_table_belongs_to_field(attribute, item)
 
     action = item.send(attribute).class.typus_options_for(:default_action_on_item) rescue 'edit'
 
     att_value = item.send(attribute)
     content = if !att_value.nil?
-      if @current_user.can_perform?(att_value.class.name, action)
-        link_to item.send(attribute).typus_name, :controller => "admin/#{attribute.pluralize}", :action => action, :id => att_value.id
+      if @current_user.can?(action, att_value.class.name)
+        link_to item.send(attribute).to_label, :controller => "admin/#{att_value.class.name.tableize}", :action => action, :id => att_value.id
       else
-        att_value.typus_name
+        att_value.to_label
       end
     end
 
-    <<-HTML
-<td>#{content}</td>
-    HTML
+    return content_tag(:td, content)
 
   end
 
   def typus_table_has_and_belongs_to_many_field(attribute, item)
-    <<-HTML
-<td>#{item.send(attribute).map { |i| i.typus_name }.join('<br />')}</td>
-    HTML
+    content = item.send(attribute).map { |i| i.to_label }.join('<br />')
+    return content_tag(:td, content)
   end
 
   def typus_table_string_field(attribute, item, link_options = {})
-    <<-HTML
-<td class="#{attribute}">#{h(item.send(attribute))}</td>
-    HTML
+    content = h(item.send(attribute))
+    return content_tag(:td, content, :class => attribute)
+  end
+
+  def typus_table_selector(attribute, item)
+    content = h(item.mapping(attribute))
+    return content_tag(:td, content, :class => attribute)
   end
 
   def typus_table_file_field(attribute, item, link_options = {})
-    <<-HTML
-<td>#{item.typus_preview_on_table(attribute)}</td>
-    HTML
+
+    attachment = attribute.split("_file_name").first
+    file_preview = Typus::Configuration.options[:file_preview]
+    file_thumbnail = Typus::Configuration.options[:file_thumbnail]
+
+    has_file_preview = item.send(attachment).styles.member?(file_preview)
+    file_preview_is_image = item.send("#{attachment}_content_type") =~ /^image\/.+/
+
+    content = if has_file_preview && file_preview_is_image
+                render "admin/helpers/preview", 
+                       :attribute => attribute, 
+                       :attachment => attachment, 
+                       :content => item.send(attribute), 
+                       :has_file_preview => has_file_preview, 
+                       :href => item.send(attachment).url(file_preview), 
+                       :item => item
+              else
+                link_to item.send(attribute), item.send(attachment).url
+              end
+
+    return content_tag(:td, content)
+
   end
 
+  # OPTIMIZE: Move html code to partial.
   def typus_table_tree_field(attribute, item)
     <<-HTML
-<td>#{item.parent.typus_name if item.parent}</td>
+<td>#{item.parent.to_label if item.parent}</td>
     HTML
   end
 
+  # OPTIMIZE: Move html code to partial.
   def typus_table_position_field(attribute, item)
 
     html_position = []
@@ -197,9 +219,8 @@ module Admin::TableHelper
       end
     end
 
-    <<-HTML
-<td>#{html_position.join(' / ')}</td>
-    HTML
+    content = html_position.join(' / ')
+    return content_tag(:td, content)
 
   end
 
@@ -208,9 +229,7 @@ module Admin::TableHelper
     date_format = item.class.typus_date_format(attribute)
     content = !item.send(attribute).nil? ? item.send(attribute).to_s(date_format) : item.class.typus_options_for(:nil)
 
-    <<-HTML
-<td>#{content}</td>
-    HTML
+    return content_tag(:td, content)
 
   end
 
@@ -218,21 +237,19 @@ module Admin::TableHelper
 
     boolean_hash = item.class.typus_boolean(attribute)
     status = item.send(attribute)
-    link_text = !item.send(attribute).nil? ? boolean_hash["#{status}".to_sym] : item.class.typus_options_for(:nil)
+    link_text = boolean_hash["#{status}".to_sym]
 
-    options = { :controller => item.class.name.tableize, :action => 'toggle', :field => attribute.gsub(/\?$/,''), :id => item.id }
+    options = { :controller => "admin/#{item.class.name.tableize}", 
+                :action => 'toggle', 
+                :id => item.id, 
+                :field => attribute.gsub(/\?$/,'') }
 
-    content = if item.class.typus_options_for(:toggle) && !item.send(attribute).nil?
-                link_to link_text, params.merge(options), 
-                                   :confirm => _("Change {{attribute}}?", 
+    confirm = _("Change {{attribute}}?", 
                                    :attribute => item.class.human_attribute_name(attribute).downcase)
-              else
-                link_text
-              end
 
-    <<-HTML
-<td align="center">#{content}</td>
-    HTML
+    content = link_to _(link_text), options, :confirm => confirm
+
+    return content_tag(:td, content)
 
   end
 
